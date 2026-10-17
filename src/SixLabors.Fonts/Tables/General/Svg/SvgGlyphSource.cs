@@ -523,8 +523,16 @@ internal sealed class SvgGlyphSource : IPaintedGlyphSource
 
         float? x1 = null, y1 = null, x2 = null, y2 = null;
         List<(float Offset, GlyphColor Color)> stops = [];
+        bool hasStops = false;
 
+        // Seed the visited set with the starting gradient so a chain that leads back to it ends there.
         HashSet<string> visited = new(StringComparer.Ordinal);
+        string? id = grad.Attribute("id")?.Value;
+        if (id is not null)
+        {
+            visited.Add(id);
+        }
+
         XElement? cur = grad;
 
         while (cur is not null)
@@ -550,14 +558,19 @@ internal sealed class SvgGlyphSource : IPaintedGlyphSource
                 gxf = ParseTransform(t);
             }
 
-            x1 ??= ParseCoordNullable(cur.Attribute("x1")?.Value);
-            y1 ??= ParseCoordNullable(cur.Attribute("y1")?.Value);
-            x2 ??= ParseCoordNullable(cur.Attribute("x2")?.Value);
-            y2 ??= ParseCoordNullable(cur.Attribute("y2")?.Value);
+            // The geometry attributes belong to linearGradient alone, so a radialGradient template
+            // in the chain supplies only the common attributes and stops.
+            if (cur.Name.LocalName == "linearGradient")
+            {
+                x1 ??= ParseCoordNullable(cur.Attribute("x1")?.Value);
+                y1 ??= ParseCoordNullable(cur.Attribute("y1")?.Value);
+                x2 ??= ParseCoordNullable(cur.Attribute("x2")?.Value);
+                y2 ??= ParseCoordNullable(cur.Attribute("y2")?.Value);
+            }
 
-            // Stops come from the first element in the chain that has any. Later elements may still
-            // supply attributes, so the walk continues past it.
-            if (stops.Count == 0)
+            // Stops come from the first element in the chain with stop children, even if none of them
+            // parse. Later elements may still supply attributes, so the walk continues past it.
+            if (!hasStops)
             {
                 foreach (XElement s in cur.Elements())
                 {
@@ -566,6 +579,7 @@ internal sealed class SvgGlyphSource : IPaintedGlyphSource
                         continue;
                     }
 
+                    hasStops = true;
                     if (TryParseStop(s, out float off, out GlyphColor c))
                     {
                         stops.Add((off, c));
@@ -579,8 +593,12 @@ internal sealed class SvgGlyphSource : IPaintedGlyphSource
                 break;
             }
 
+            // A template must be a linearGradient or radialGradient element. A reference to anything
+            // else is invalid and ignored, ending the chain without reading the target's attributes.
             string refId = href[1..];
-            if (!visited.Add(refId) || !idMap.TryGetValue(refId, out cur))
+            if (!visited.Add(refId)
+                || !idMap.TryGetValue(refId, out cur)
+                || cur.Name.LocalName is not ("linearGradient" or "radialGradient"))
             {
                 break;
             }
@@ -640,8 +658,16 @@ internal sealed class SvgGlyphSource : IPaintedGlyphSource
 
         float? cx = null, cy = null, r = null, fx = null, fy = null, fr = null;
         List<(float Offset, GlyphColor Color)> stops = [];
+        bool hasStops = false;
 
+        // Seed the visited set with the starting gradient so a chain that leads back to it ends there.
         HashSet<string> visited = new(StringComparer.Ordinal);
+        string? id = grad.Attribute("id")?.Value;
+        if (id is not null)
+        {
+            visited.Add(id);
+        }
+
         XElement? cur = grad;
 
         while (cur is not null)
@@ -667,16 +693,21 @@ internal sealed class SvgGlyphSource : IPaintedGlyphSource
                 gxf = ParseTransform(t);
             }
 
-            cx ??= ParseCoordNullable(cur.Attribute("cx")?.Value);
-            cy ??= ParseCoordNullable(cur.Attribute("cy")?.Value);
-            r ??= ParseRadiusNullable(cur.Attribute("r")?.Value);
-            fx ??= ParseCoordNullable(cur.Attribute("fx")?.Value);
-            fy ??= ParseCoordNullable(cur.Attribute("fy")?.Value);
-            fr ??= ParseRadiusNullable(cur.Attribute("fr")?.Value);
+            // The geometry attributes belong to radialGradient alone, so a linearGradient template
+            // in the chain supplies only the common attributes and stops.
+            if (cur.Name.LocalName == "radialGradient")
+            {
+                cx ??= ParseCoordNullable(cur.Attribute("cx")?.Value);
+                cy ??= ParseCoordNullable(cur.Attribute("cy")?.Value);
+                r ??= ParseRadiusNullable(cur.Attribute("r")?.Value);
+                fx ??= ParseCoordNullable(cur.Attribute("fx")?.Value);
+                fy ??= ParseCoordNullable(cur.Attribute("fy")?.Value);
+                fr ??= ParseRadiusNullable(cur.Attribute("fr")?.Value);
+            }
 
-            // Stops come from the first element in the chain that has any. Later elements may still
-            // supply attributes, so the walk continues past it.
-            if (stops.Count == 0)
+            // Stops come from the first element in the chain with stop children, even if none of them
+            // parse. Later elements may still supply attributes, so the walk continues past it.
+            if (!hasStops)
             {
                 foreach (XElement s in cur.Elements())
                 {
@@ -685,6 +716,7 @@ internal sealed class SvgGlyphSource : IPaintedGlyphSource
                         continue;
                     }
 
+                    hasStops = true;
                     if (TryParseStop(s, out float off, out GlyphColor c))
                     {
                         stops.Add((off, c));
@@ -698,8 +730,12 @@ internal sealed class SvgGlyphSource : IPaintedGlyphSource
                 break;
             }
 
+            // A template must be a linearGradient or radialGradient element. A reference to anything
+            // else is invalid and ignored, ending the chain without reading the target's attributes.
             string refId = href[1..];
-            if (!visited.Add(refId) || !idMap.TryGetValue(refId, out cur))
+            if (!visited.Add(refId)
+                || !idMap.TryGetValue(refId, out cur)
+                || cur.Name.LocalName is not ("linearGradient" or "radialGradient"))
             {
                 break;
             }
